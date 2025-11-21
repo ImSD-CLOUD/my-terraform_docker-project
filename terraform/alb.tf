@@ -1,5 +1,3 @@
-
-
 # 1. Application Load Balancer (ALB)
 
 resource "aws_lb" "app_alb" {
@@ -11,15 +9,15 @@ resource "aws_lb" "app_alb" {
 
   subnets = [aws_subnet.sn1.id, aws_subnet.sn4.id]
 
-  enable_deletion_protection = false
+  # SECURITY/OPERATIONAL FIX: Prevents accidental deletion of the load balancer.
+  enable_deletion_protection = true 
 
   tags = {
     Name = "app-alb"
   }
 }
 
-# 2. Target Group
-
+# 2. Target Group (No changes needed)
 resource "aws_lb_target_group" "app_tg" {
   name     = "app-target-group"
   port     = 80
@@ -27,7 +25,6 @@ resource "aws_lb_target_group" "app_tg" {
   vpc_id   = aws_vpc.docker_vpc.id
 
   # CRITICAL for Fargate: Target type must be 'ip', not 'instance'
-
   target_type = "ip"
 
   health_check {
@@ -46,8 +43,7 @@ resource "aws_lb_target_group" "app_tg" {
 }
 
 
-# 3. ALB Listener (HTTP)
-
+# 3. ALB Listener (HTTP) (No changes needed)
 resource "aws_lb_listener" "app_listener" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = "80"
