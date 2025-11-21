@@ -6,13 +6,13 @@ on:
       - main
 
 permissions:
-  contents: read  # Matches your "Read repository contents" setting
+  contents: read
 
 env:
   AWS_REGION: us-east-1                   
   ECR_REPOSITORY: repo                    # Matches your ecr.tf
-  ECS_SERVICE: app-service                # Matches 'name' in ecs.tf (aws_ecs_service)
-  ECS_CLUSTER: docker-cluster             # Matches 'name' in ecs.tf (aws_ecs_cluster)
+  ECS_SERVICE: app-service                # Matches 'name' in ecs.tf
+  ECS_CLUSTER: docker-cluster             # Matches 'name' in ecs.tf
   ECS_TASK_DEFINITION: app-task-definition # Matches 'family' in ecs.tf
   CONTAINER_NAME: app                     # Matches 'name' in container_definitions
 
@@ -33,11 +33,11 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
 
     # --- PART 1: INFRASTRUCTURE ---
-    # This works ONLY if you set up the S3 Backend (Step 2 above).
-    # If you skipped Step 2, COMMENT OUT these Terraform steps for now.
     
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_wrapper: false  # <--- CRITICAL FIX: Prevents output corruption
 
     - name: Terraform Init
       working-directory: ./terraform
@@ -49,7 +49,7 @@ jobs:
 
     - name: Terraform Apply
       working-directory: ./terraform
-      run: terraform apply --auto-approve
+      run: terraform apply -auto-approve
 
     - name: Get ECR URL from Terraform Output
       working-directory: ./terraform
