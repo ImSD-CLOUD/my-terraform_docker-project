@@ -1,0 +1,98 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read  # Matches your "Read repository contents" setting
+
+env:
+  AWS_REGION: us-east-1                   
+  ECR_REPOSITORY: repo                    # Matches your ecr.tf
+  ECS_SERVICE: app-service                # Matches 'name' in ecs.tf (aws_ecs_service)
+  ECS_CLUSTER: docker-cluster             # Matches 'name' in ecs.tf (aws_ecs_cluster)
+  ECS_TASK_DEFINITION: app-task-definition # Matches 'family' in ecs.tf
+  CONTAINER_NAME: app                     # Matches 'name' in container_definitions
+
+jobs:
+  deploy:
+    name: Deploy Infra and App
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # --- PART 1: INFRASTRUCTURE ---
+    # This works ONLY if you set up the S3 Backend (Step 2 above).
+    # If you skipped Step 2, COMMENT OUT these Terraform steps for now.
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Validate
+      working-directory: ./terraform
+      run: terraform validate
+
+    - name: Terraform Apply
+      working-directory: ./terraform
+      run: terraform apply --auto-approve
+
+    - name: Get ECR URL from Terraform Output
+      working-directory: ./terraform
+      id: tf-output
+      run: |
+        ECR_URL=$(terraform output -raw ecr_repository_url)
+        echo "ECR_URL=$ECR_URL" >> $GITHUB_ENV
+
+    # --- PART 2: APPLICATION ---
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push image to Amazon ECR
+      working-directory: ./app
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    # --- PART 3: DEPLOY TO ECS ---
+
+    - name: Download Task Definition
+      run: |
+        aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} --query taskDefinition > task-definition.json
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ env.ECR_URL }}:${{ github.sha }}
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
