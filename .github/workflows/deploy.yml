@@ -47,9 +47,9 @@ jobs:
       working-directory: ./terraform
       run: terraform validate
 
-    - name: Terraform Apply
+    - name: Terraform Destroy
       working-directory: ./terraform
-      run: terraform apply -auto-approve
+      run: terraform destroy -auto-approve
 
     - name: Get ECR URL from Terraform Output
       working-directory: ./terraform
