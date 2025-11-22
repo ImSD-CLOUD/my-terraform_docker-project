@@ -10,7 +10,7 @@ resource "aws_lb" "app_alb" {
   subnets = [aws_subnet.sn1.id, aws_subnet.sn4.id]
 
   # SECURITY/OPERATIONAL FIX: Prevents accidental deletion of the load balancer.
-  enable_deletion_protection = true 
+  enable_deletion_protection = false 
 
   tags = {
     Name = "app-alb"

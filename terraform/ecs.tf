@@ -70,6 +70,10 @@ resource "aws_ecs_task_definition" "td" {
   cpu    = "256"
   memory = "512"
 
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
+
   container_definitions = jsonencode([
     {
       name = "app"
@@ -112,6 +116,7 @@ resource "aws_ecs_service" "service" {
   enable_execute_command             = true
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
+  health_check_grace_period_seconds = 60
 
   network_configuration {
 
